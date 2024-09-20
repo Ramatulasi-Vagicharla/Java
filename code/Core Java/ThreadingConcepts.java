@@ -1,137 +1,100 @@
 public class ThreadingConcepts {
-    // volatile keyword ensures that the variable is always read from main memory
-    private volatile boolean flag = false;
 
-    // synchronized method to demonstrate thread synchronization
-    public synchronized void synchronizedMethod() {
-        System.out.println(Thread.currentThread().getName() + " entered synchronized method");
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        System.out.println(Thread.currentThread().getName() + " exiting synchronized method");
-    }
+    private boolean flag = true; // Simple flag to demonstrate synchronization
 
-    // Runnable interface implementation 
+    // Custom runnable to simulate some work
     class MyRunnable implements Runnable {
+        @Override
         public void run() {
-            System.out.println(Thread.currentThread().getName() + " is running");
+            for (int i = 1; i <= 5; i++) {
+                System.out.println(Thread.currentThread().getName() + " is running step " + i);
+                try {
+                    Thread.sleep(500); // Simulate work by sleeping
+                } catch (InterruptedException e) {
+                    System.out.println(Thread.currentThread().getName() + " was interrupted");
+                }
+            }
         }
     }
 
-    // Thread class extension
-    class MyThread extends Thread {
+    // Custom thread class that uses synchronization to modify a shared variable
+    class WorkerThread extends Thread {
         public void run() {
-            System.out.println(Thread.currentThread().getName() + " is running");
+            synchronized (ThreadingConcepts.this) {
+                flag = !flag; // Toggle the flag to show that this method affects the shared state
+                System.out.println(Thread.currentThread().getName() + " has changed the flag to: " + flag);
+            }
         }
+    }
+
+    // Lambda implementation for thread creation
+    public void createLambdaThread() {
+        Thread lambdaThread = new Thread(() -> {
+            for (int i = 1; i <= 3; i++) {
+                System.out.println(Thread.currentThread().getName() + " is executing lambda task " + i);
+            }
+        });
+        lambdaThread.setName("LambdaThread");
+        lambdaThread.start();
     }
 
     public void demonstrateThreading() {
-        // Creating and starting a thread using Runnable
+        // Starting a thread using Runnable
         Thread thread1 = new Thread(new MyRunnable(), "RunnableThread");
         thread1.start();
 
-        // Creating and starting a thread by extending Thread class
-        MyThread thread2 = new MyThread();
-        thread2.setName("ExtendedThread");
-        thread2.start();
+        // Starting a thread by extending Thread class
+        WorkerThread workerThread = new WorkerThread();
+        workerThread.setName("WorkerThread");
+        workerThread.start();
 
-        // Creating a thread using lambda expression (Java 8+)
-        Thread thread3 = new Thread(() -> System.out.println(Thread.currentThread().getName() + " is running"), "LambdaThread");
-        thread3.start();
+        // Create and start a lambda thread
+        createLambdaThread();
 
-        // Demonstrating thread states
-        System.out.println("Thread 3 state: " + thread3.getState());
-
-        // Thread priority
-        thread3.setPriority(Thread.MAX_PRIORITY);
-        System.out.println("Thread 3 priority: " + thread3.getPriority());
-
-        // Joining threads
+        // Demonstrating thread states and joining
         try {
-            thread1.join();
-            thread2.join();
-            thread3.join();
+            System.out.println("Thread1 state before join: " + thread1.getState());
+            thread1.join(); // Waits for thread1 to finish
+            System.out.println("Thread1 state after join: " + thread1.getState());
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
 
-        // Demonstrating synchronized block
-        synchronized(this) {
-            System.out.println(Thread.currentThread().getName() + " in synchronized block");
-        }
-
-        // Using wait() and notify()
+        // Demonstrating wait and notify without deadlock
         final Object lock = new Object();
         Thread waiter = new Thread(() -> {
-            synchronized(lock) {
+            synchronized (lock) {
                 try {
-                    System.out.println("Waiter is waiting");
-                    lock.wait();
-                    System.out.println("Waiter is notified");
+                    System.out.println("Waiter is waiting for a notification...");
+                    lock.wait(); // Wait for notification
+                    System.out.println("Waiter received the notification!");
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
             }
-        });
+        }, "WaiterThread");
 
         Thread notifier = new Thread(() -> {
-            synchronized(lock) {
-                System.out.println("Notifier is notifying");
-                lock.notify();
+            synchronized (lock) {
+                try {
+                    Thread.sleep(2000); // Simulate some work before notifying
+                    System.out.println("Notifier is sending notification...");
+                    lock.notify(); // Notify the waiting thread
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
-        });
+        }, "NotifierThread");
 
         waiter.start();
-        try {
-            Thread.sleep(1000000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
         notifier.start();
 
-        // Demonstrating interrupt
-        Thread sleeper = new Thread(() -> {
-            try {
-                Thread.sleep(5000);
-            } catch (InterruptedException e) {
-                System.out.println("Sleeper was interrupted");
-            }
-        });
-        sleeper.start();
-        sleeper.interrupt();
-
-        // Using ThreadLocal
-        ThreadLocal<Integer> threadLocal = new ThreadLocal<>();
-        threadLocal.set(42);
-        System.out.println("ThreadLocal value: " + threadLocal.get());
-
-        // Demonstrating deadlock (be cautious when running this)
-        final Object resource1 = new Object();
-        final Object resource2 = new Object();
-        Thread deadlockThread1 = new Thread(() -> {
-            synchronized(resource1) {
-                System.out.println("Thread 1: Holding resource 1...");
-                try { Thread.sleep(100);} catch (InterruptedException e) {}
-                System.out.println("Thread 1: Waiting for resource 2...");
-                synchronized(resource2) {
-                    System.out.println("Thread 1: Holding resource 1 and resource 2");
-                }
-            }
-        });
-        Thread deadlockThread2 = new Thread(() -> {
-            synchronized(resource2) {
-                System.out.println("Thread 2: Holding resource 2...");
-                try { Thread.sleep(100);} catch (InterruptedException e) {}
-                System.out.println("Thread 2: Waiting for resource 1...");
-                synchronized(resource1) {
-                    System.out.println("Thread 2: Holding resource 2 and resource 1");
-                }
-            }
-        });
-        deadlockThread1.start();
-        deadlockThread2.start();
+        // Using ThreadLocal to store individual thread-specific data
+        ThreadLocal<Integer> threadLocal = ThreadLocal.withInitial(() -> (int) (Math.random() * 100));
+        Thread threadLocalThread = new Thread(() -> {
+            System.out.println(Thread.currentThread().getName() + " has ThreadLocal value: " + threadLocal.get());
+        }, "ThreadLocalThread");
+        threadLocalThread.start();
     }
 
     public static void main(String[] args) {
