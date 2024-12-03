@@ -1,1 +1,1 @@
-In this you can find all Advanced Java Core Concepts.
+In this you can find Java Core Concepts.
